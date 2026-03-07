@@ -1,0 +1,49 @@
+# Build outputs
+build/
+bin/
+out/
+
+# Gradle
+.gradle/
+gradle-app.setting
+!gradle/wrapper/gradle-wrapper.jar
+
+# IDE - IntelliJ
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# IDE - Eclipse
+.project
+.classpath
+.settings/
+.factorypath
+
+# IDE - VS Code
+.vscode/
+!.vscode/settings.json
+!.vscode/launch.json
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Java
+*.class
+*.jar
+*.war
+*.ear
+*.nar
+hs_err_pid*
+replay_pid*
+
+# WPILib
+networktables.json
+simgui.json
+simgui-ds.json
+simgui-window.json
+
+# Logs
+*.log
