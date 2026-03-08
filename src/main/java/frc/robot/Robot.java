@@ -28,7 +28,7 @@ public class Robot extends TimedRobot {
      * Enable vision processing. Set to true to enable vision measurements
      * in RobotPeriodic.
      */
-    private static final boolean BOT_VISION = false;
+    private static final boolean BOT_VISION = true;
 
     @Override
     public void robotInit() {
