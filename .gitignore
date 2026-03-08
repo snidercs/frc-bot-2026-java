@@ -39,11 +39,12 @@ desktop.ini
 hs_err_pid*
 replay_pid*
 
-# WPILib
+# WPILib / Simulation
 networktables.json
 simgui.json
 simgui-ds.json
 simgui-window.json
+ctre_sim/
 
 # Logs
 *.log
