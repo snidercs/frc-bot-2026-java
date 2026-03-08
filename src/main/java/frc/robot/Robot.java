@@ -8,10 +8,16 @@ import edu.wpi.first.math.VecBuilder;
 import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.RobotController;
 import edu.wpi.first.wpilibj2.command.CommandScheduler;
-import edu.wpi.first.wpilibj.TimedRobot;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.CommandScheduler;
+
+import org.littletonrobotics.junction.LogFileUtil;
+import org.littletonrobotics.junction.LoggedRobot;
+import org.littletonrobotics.junction.Logger;
+import org.littletonrobotics.junction.networktables.NT4Publisher;
+import org.littletonrobotics.junction.wpilog.WPILOGReader;
+import org.littletonrobotics.junction.wpilog.WPILOGWriter;
 
 /**
  * The methods in this class are called automatically corresponding to each mode, as described in
@@ -20,7 +26,7 @@ import edu.wpi.first.wpilibj2.command.CommandScheduler;
  *
  * Ported from robot.hpp/cpp in the C++ project.
  */
-public class Robot extends TimedRobot {
+public class Robot extends LoggedRobot {
     private Command autoCommand;
     private RobotContainer container;
 
@@ -29,6 +35,23 @@ public class Robot extends TimedRobot {
      * in RobotPeriodic.
      */
     private static final boolean BOT_VISION = true;
+
+    public Robot() {
+        // AdvantageKit logger configuration — must run before any other init
+        Logger.recordMetadata("ProjectName", "frc-bot-2026-java");
+
+        if (isReal()) {
+            Logger.addDataReceiver(new WPILOGWriter()); // Log to USB stick ("/U/logs")
+            Logger.addDataReceiver(new NT4Publisher());  // Publish to NetworkTables
+        } else {
+            setUseTiming(false); // Run as fast as possible in replay
+            String logPath = LogFileUtil.findReplayLog();
+            Logger.setReplaySource(new WPILOGReader(logPath));
+            Logger.addDataReceiver(new WPILOGWriter(LogFileUtil.addPathSuffix(logPath, "_sim")));
+        }
+
+        Logger.start();
+    }
 
     @Override
     public void robotInit() {
