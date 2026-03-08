@@ -49,6 +49,8 @@ public class Climber extends SubsystemBase {
         configureMotor();
     }
 
+    // NOTE: Changes to motor config or zeroing should be reflected in
+    //       README.md → "Power-Up Initialization".
     private void configureMotor() {
         TalonFXConfiguration config = new TalonFXConfiguration()
             .withCurrentLimits(

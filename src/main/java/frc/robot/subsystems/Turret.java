@@ -97,6 +97,8 @@ public class Turret extends SubsystemBase {
         configureMotors();
     }
 
+    // NOTE: Changes to motor config or zeroing should be reflected in
+    //       README.md → "Power-Up Initialization".
     private void configureMotors() {
         // Rotation motor configuration (position control for aiming)
         TalonFXConfiguration rotationConfig = new TalonFXConfiguration()

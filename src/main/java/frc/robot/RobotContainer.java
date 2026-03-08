@@ -61,6 +61,8 @@ public class RobotContainer {
     // ── Auto chooser ─────────────────────────────────────────────────────────
     private SendableChooser<Command> autoChooser = null;
 
+    // NOTE: Changes to this constructor should be reflected in
+    //       README.md → "Power-Up Initialization".
     public RobotContainer() {
         // Construct drivetrain with 250 Hz odometry update frequency
         drivetrain = new CommandSwerveDrivetrain(

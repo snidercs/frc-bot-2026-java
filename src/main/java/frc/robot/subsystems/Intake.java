@@ -51,6 +51,8 @@ public class Intake extends SubsystemBase {
         configureMotors();
     }
 
+    // NOTE: Changes to motor config should be reflected in
+    //       README.md → "Power-Up Initialization".
     private void configureMotors() {
         // Top motor configuration
         TalonFXConfiguration topConfig = new TalonFXConfiguration()

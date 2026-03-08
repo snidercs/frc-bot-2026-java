@@ -64,6 +64,8 @@ public class VisionMulti implements Vision.VisionIO {
     private int rejectedOutOfBounds = 0;
     private int acceptedCount = 0;
 
+    // NOTE: Changes to camera init should be reflected in
+    //       README.md → "Power-Up Initialization".
     public VisionMulti() {
         this.fieldLayout = Vision.getFieldLayout();
         this.cameras = new CameraUnit[Vision.CAMERA_NAMES.length];

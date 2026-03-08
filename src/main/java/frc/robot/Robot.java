@@ -36,6 +36,8 @@ public class Robot extends LoggedRobot {
      */
     private static final boolean BOT_VISION = true;
 
+    // NOTE: Changes to this constructor or robotInit() should be reflected in
+    //       README.md → "Power-Up Initialization".
     public Robot() {
         // AdvantageKit logger configuration — must run before any other init
         Logger.recordMetadata("ProjectName", "frc-bot-2026-java");
