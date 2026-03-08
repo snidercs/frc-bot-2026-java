@@ -102,6 +102,14 @@ public class RobotContainer {
                 NamedCommands.registerCommand("aimAndPass",
                     turret.aimAndPassCommand(() -> drivetrain.getState().Pose));
 
+                // Shoot-then-climb auto commands
+                NamedCommands.registerCommand("climbAuto",
+                    climber.climbCommand().withTimeout(4.0));
+                NamedCommands.registerCommand("aimAndShootAuto",
+                    turret.aimAndShootHubCommand(() -> drivetrain.getState().Pose).withTimeout(5.0));
+                NamedCommands.registerCommand("intakeStutterShort",
+                    intake.stutterCommand().withTimeout(3.0));
+
                 autoChooser = AutoBuilder.buildAutoChooser(Config.AUTO_DEFAULT_NAME);
                 SmartDashboard.putData("AutoChooser", autoChooser);
             } catch (Exception e) {

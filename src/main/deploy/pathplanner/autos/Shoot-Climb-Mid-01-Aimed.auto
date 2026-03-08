@@ -1,0 +1,43 @@
+{
+  "version": "2025.0",
+  "command": {
+    "type": "sequential",
+    "data": {
+      "commands": [
+        {
+          "type": "path",
+          "data": {
+            "pathName": "Backup-Simple-Mid-01"
+          }
+        },
+        {
+          "type": "named",
+          "data": {
+            "name": "aimAndShootAuto"
+          }
+        },
+        {
+          "type": "named",
+          "data": {
+            "name": "turretStop"
+          }
+        },
+        {
+          "type": "path",
+          "data": {
+            "pathName": "Shoot-To-Cage-Mid-01"
+          }
+        },
+        {
+          "type": "named",
+          "data": {
+            "name": "climbAuto"
+          }
+        }
+      ]
+    }
+  },
+  "resetOdom": true,
+  "folder": null,
+  "choreoAuto": false
+}

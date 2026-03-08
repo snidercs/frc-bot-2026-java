@@ -130,6 +130,32 @@ These commands are registered with PathPlanner and can be used in `.auto` routin
 | `aimAndShootHub` | Aim at Hub, auto-fire when ready |
 | `aimPass` | Aim at nearest Tower + spin up at pass speed |
 | `aimAndPass` | Aim at nearest Tower, auto-fire at pass speed |
+| `climbAuto` | Run climber at full speed for up to 4 s (auto use) |
+| `aimAndShootAuto` | Aim at Hub + auto-fire, 5 s timeout (auto use) |
+| `intakeStutterShort` | Intake stutter pattern, 3 s timeout (auto use) |
+
+### Autonomous Routines
+
+Select via the **AutoChooser** widget on SmartDashboard. Default: `Backup-Shoot-Left`.
+
+| Auto | Description |
+|------|-------------|
+| `Backup-Shoot-Left` | Back up left, shoot (no aim) |
+| `Backup-Shoot-Mid-00` | Back up mid-low, shoot (no aim) |
+| `Backup-Shoot-Mid-01` | Back up mid-high, shoot (no aim) |
+| `Backup-Shoot-Right` | Back up right, shoot (no aim) |
+| `Shoot-Climb-Left-Aimed` | Back up left → vision-aimed shoot → drive to upper cage → climb |
+| `Shoot-Climb-Left-Simple` | Back up left → shoot (no aim) → drive to upper cage → climb |
+| `Shoot-Climb-Mid-00-Aimed` | Back up mid-low → vision-aimed shoot → drive to mid cage → climb |
+| `Shoot-Climb-Mid-00-Simple` | Back up mid-low → shoot (no aim) → drive to mid cage → climb |
+| `Shoot-Climb-Mid-01-Aimed` | Back up mid-high → vision-aimed shoot → drive to mid cage → climb |
+| `Shoot-Climb-Mid-01-Simple` | Back up mid-high → shoot (no aim) → drive to mid cage → climb |
+| `Shoot-Climb-Right-Aimed` | Back up right → vision-aimed shoot → drive to lower cage → climb |
+| `Shoot-Climb-Right-Simple` | Back up right → shoot (no aim) → drive to lower cage → climb |
+
+> **Alliance flipping:** All paths are authored for Blue alliance. PathPlanner
+> automatically mirrors them for Red alliance, so the robot drives to the correct
+> alliance wall cage regardless of alliance color.
 
 ---
 
