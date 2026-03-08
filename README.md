@@ -77,6 +77,36 @@ src/
     └── InputUtilTest.java              # JUnit 5 tests for input shaping
 ```
 
+## Power-Up Initialization
+
+When the robot powers on, each subsystem automatically configures its hardware and establishes known starting positions. No manual intervention is needed for this sequence — it runs entirely in the `RobotContainer` and subsystem constructors.
+
+### Startup sequence
+
+1. **AdvantageKit logger** — `Robot` starts the AdvantageKit logger before anything else. On a real robot it writes to a USB stick and publishes to NetworkTables; in replay mode it reads from a prior log file.
+2. **Brownout threshold** — `robotInit()` sets the roboRIO brownout voltage to 6.0 V to prevent nuisance brownouts under heavy CAN load.
+3. **Drivetrain (swerve)** — `CommandSwerveDrivetrain` initializes all four swerve modules (Kraken X60 drive + steer, CANcoder) at a 250 Hz odometry update rate. Operator perspective is automatically set for the current alliance color once the Driver Station connects.
+4. **PathPlanner** — `configurePathPlanner()` loads the robot configuration from PathPlanner GUI settings and registers the `AutoBuilder` so autonomous routines can be selected. All named commands (shooter, intake, aiming) are registered at this time.
+5. **Turret** — The three turret motors are configured with current limits, PID gains, and software limits:
+   - **Rotation motor** — set to brake mode, position zeroed to 0.25 rotations (90°, facing right of robot). Software limits constrain travel to −0.055 to +0.25 rotations.
+   - **Shooter flywheel** — configured for velocity control, coast mode.
+   - **Uptake feeder** — configured for velocity control, coast mode.
+6. **Climber** — The Kraken X60 is configured with a 180:1 gear ratio, brake mode, and software-limited travel (0 to −3.109 rotations). The encoder position is zeroed to 0.0 on startup, defining the current position as the forward (retracted) limit.
+7. **Intake** — Both top and bottom Kraken X44 motors are configured with current limits. The bottom motor is inverted so both rollers spin inward together. Both run in coast mode.
+8. **Vision** — `VisionMulti` loads the `k2026RebuiltAndymark` AprilTag field layout and creates a `PhotonPoseEstimator` for each of the four cameras (FL, FR, BL, BR). Cameras begin streaming immediately.
+9. **Controller bindings** — Joystick or gamepad bindings are wired based on `Config.GAMEPAD`. A disabled-mode idle command keeps the swerve modules in an idle state until a match begins.
+
+### What "zeroing" means
+
+The climber and turret rotation motors use relative encoders (built into the Kraken/TalonFX). On power-up, the code calls `setPosition()` to seed a known value:
+
+| Motor | Startup position | Assumption |
+|---|---|---|
+| Climber | 0.0 rotations (fully retracted) | Robot was powered on with the climber fully retracted |
+| Turret rotation | 0.25 rotations (90° right) | Robot was powered on with the turret facing its mechanical home |
+
+If these assumptions are wrong (e.g., the turret was bumped during transport), the software limits will be offset. Use the turret zero button (stick 1 button 3) to re-zero after manually centering the turret.
+
 ## Field Setup & Calibration
 
 Follow these steps every time the robot arrives at a new field or match venue.
