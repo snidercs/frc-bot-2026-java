@@ -77,6 +77,56 @@ src/
     └── InputUtilTest.java              # JUnit 5 tests for input shaping
 ```
 
+## Field Setup & Calibration
+
+Follow these steps every time the robot arrives at a new field or match venue.
+
+### 1. Power on & connect
+
+1. Power on the robot and wait for the roboRIO to boot (status LED solid green).
+2. Connect the Driver Station laptop to the robot via USB, ethernet, or the FMS radio.
+3. Verify all four cameras (FL, FR, BL, BR) show a live feed in the PhotonVision dashboard at `http://photonvision.local:5800`.
+
+### 2. Reset field-centric heading
+
+The swerve drivetrain uses a field-centric reference frame. **Before each match**, align the robot facing directly away from your driver station, then press:
+
+- **Dual sticks:** button 8 on stick 0
+- **Gamepad:** left bumper
+
+This calls `seedFieldCentric()` and sets the current heading as the field-forward direction. Repeat any time the heading drifts or after the robot is physically repositioned.
+
+### 3. Verify vision cameras
+
+1. Open the PhotonVision web UI and confirm each camera detects AprilTags on the field.
+2. The robot code uses the `k2026RebuiltAndymark` AprilTag field layout — no manual tag ID entry is needed.
+3. Watch the Driver Station console for vision rejection warnings. High rejection counts (visible via `SmartDashboard` under the Vision keys) may indicate a camera is misaligned or obstructed.
+
+### 4. Check turret zero
+
+The turret rotation motor uses a position PID. If the turret was bumped during transport:
+
+1. Manually center the turret so it faces straight forward.
+2. Press **button 3 on stick 1** (dual sticks) to zero the rotation encoder.
+
+### 5. Select auto routine
+
+1. Open `SmartDashboard` or `Shuffleboard`.
+2. Use the **AutoChooser** widget to select the desired autonomous routine. The default is `Backup-Shoot-Left`.
+3. Available autos are listed in [CONTROLS.md](CONTROLS.md).
+
+### 6. Pre-match checklist
+
+| Check | What to look for |
+|---|---|
+| Battery voltage | ≥ 12.4 V on Driver Station |
+| Brownout threshold | Set to 6.0 V (automatic in code) |
+| Joystick mapping | Driver Station shows correct controllers in slots 0 and 1 (or slot 0 for gamepad) |
+| Alliance color | Confirmed in Driver Station — turret aiming uses `hubPosition()` / `towerPosition()` which are alliance-aware |
+| Cameras connected | All four cameras streaming in PhotonVision dashboard |
+| Intake clear | No game pieces jammed in intake or uptake |
+| Climber retracted | Climber at bottom limit before match start |
+
 ## Contributors
 
 The original C++ codebase was written by:
