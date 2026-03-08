@@ -4,27 +4,8 @@
 
 package frc.robot.subsystems;
 
-import static edu.wpi.first.units.Units.*;
-
 import java.util.function.DoubleSupplier;
 import java.util.function.Supplier;
-
-import com.ctre.phoenix6.CANBus;
-import com.ctre.phoenix6.BaseStatusSignal;
-import com.ctre.phoenix6.configs.CurrentLimitsConfigs;
-import com.ctre.phoenix6.configs.FeedbackConfigs;
-import com.ctre.phoenix6.configs.MotorOutputConfigs;
-import com.ctre.phoenix6.configs.Slot0Configs;
-import com.ctre.phoenix6.configs.SoftwareLimitSwitchConfigs;
-import com.ctre.phoenix6.configs.TalonFXConfiguration;
-import com.ctre.phoenix6.configs.VoltageConfigs;
-import com.ctre.phoenix6.controls.DutyCycleOut;
-import com.ctre.phoenix6.controls.PositionVoltage;
-import com.ctre.phoenix6.controls.VelocityVoltage;
-import com.ctre.phoenix6.controls.VoltageOut;
-import com.ctre.phoenix6.hardware.TalonFX;
-import com.ctre.phoenix6.signals.InvertedValue;
-import com.ctre.phoenix6.signals.NeutralModeValue;
 
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Rotation2d;
@@ -34,8 +15,8 @@ import edu.wpi.first.wpilibj2.command.Commands;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 
 import org.littletonrobotics.junction.AutoLogOutput;
+import org.littletonrobotics.junction.Logger;
 
-import frc.robot.Config;
 import frc.robot.Vision;
 
 /**
@@ -44,47 +25,21 @@ import frc.robot.Vision;
  * Controls a turret rotation motor for aiming and shooter flywheel motor(s).
  * Supports both auto-aim mode (using robot pose from vision) and manual control.
  *
+ * Hardware interaction is delegated to a {@link TurretIO} implementation
+ * so that sensor inputs are deterministically replayable via AdvantageKit.
+ *
  * Ported from turret.hpp/cpp in the C++ project.
  */
 public class Turret extends SubsystemBase {
 
-    // Rotation motor (positions turret)
-    private final TalonFX rotationMotor =
-        new TalonFX(Config.TURRET_ROTATION_DEVICE_ID, new CANBus(Config.TURRET_ROTATION_CAN_BUS));
+    private final TurretIO io;
+    private final TurretIOInputsAutoLogged inputs = new TurretIOInputsAutoLogged();
 
-    // Shooter flywheel motor(s)
-    private final TalonFX shooterMotor =
-        new TalonFX(Config.TURRET_SHOOTER_DEVICE_ID, new CANBus(Config.TURRET_SHOOTER_CAN_BUS));
-
-    // Uptake motor (feeds game pieces into shooter)
-    private final TalonFX uptakeMotor =
-        new TalonFX(Config.TURRET_UPTAKE_DEVICE_ID, new CANBus(Config.TURRET_UPTAKE_CAN_BUS));
-
-    // Control requests (reusable)
-    private final PositionVoltage positionRequest = new PositionVoltage(0);
-    private final VelocityVoltage rotationVelocityRequest = new VelocityVoltage(0);
-    private final VelocityVoltage shooterVelocityRequest = new VelocityVoltage(0);
-    private final VelocityVoltage uptakeVelocityRequest = new VelocityVoltage(0);
-    private final VoltageOut voltageRequest = new VoltageOut(0);
-    private final DutyCycleOut dutyCycleRequest = new DutyCycleOut(0);
-
-    // State
+    // Subsystem state (logged via @AutoLogOutput)
     @AutoLogOutput(key = "Turret/AutoAimEnabled")
     private boolean autoAimEnabled = false;
     @AutoLogOutput(key = "Turret/TargetAngleDeg")
     private double targetAngleDeg = 0;
-
-    // Cached sensor values (updated in periodic to avoid redundant CAN reads)
-    @AutoLogOutput(key = "Turret/CurrentAngleDeg")
-    private double cachedAngleDeg = 0;
-    @AutoLogOutput(key = "Turret/ShooterVelocityRps")
-    private double cachedShooterVelocityRps = 0;
-    @AutoLogOutput(key = "Turret/RotationVelocityRps")
-    private double cachedRotationVelocityRps = 0;
-    @AutoLogOutput(key = "Turret/RotationVoltage")
-    private double cachedMotorVoltage = 0;
-    @AutoLogOutput(key = "Turret/RotationCurrentAmps")
-    private double cachedMotorCurrent = 0;
     @AutoLogOutput(key = "Turret/CommandedDutyCycle")
     private double cachedDutyCycle = 0;
 
@@ -104,154 +59,27 @@ public class Turret extends SubsystemBase {
     // Gear ratio from motor to turret (motor rotations per turret rotation)
     private static final double kRotationGearRatio = 100.0; // TODO: measure actual ratio
 
-    public Turret() {
+    public Turret(TurretIO io) {
         setName("Turret");
-        configureMotors();
-    }
-
-    // NOTE: Changes to motor config or zeroing should be reflected in
-    //       README.md → "Power-Up Initialization".
-    private void configureMotors() {
-        // Rotation motor configuration (position control for aiming)
-        TalonFXConfiguration rotationConfig = new TalonFXConfiguration()
-            .withCurrentLimits(
-                new CurrentLimitsConfigs()
-                    .withSupplyCurrentLimit(Amps.of(30))
-                    .withSupplyCurrentLimitEnable(true)
-                    .withStatorCurrentLimit(Amps.of(60))
-                    .withStatorCurrentLimitEnable(true)
-            )
-            .withVoltage(
-                new VoltageConfigs()
-                    .withPeakForwardVoltage(Volts.of(12))
-                    .withPeakReverseVoltage(Volts.of(-12))
-            )
-            .withSlot0(
-                new Slot0Configs()
-                    .withKP(24.0)
-                    .withKI(0.0)
-                    .withKD(0.2)
-                    .withKV(0.12)
-            )
-            .withMotorOutput(
-                new MotorOutputConfigs()
-                    .withInverted(InvertedValue.CounterClockwise_Positive)
-                    .withNeutralMode(NeutralModeValue.Brake)
-            )
-            .withFeedback(
-                new FeedbackConfigs()
-                    .withSensorToMechanismRatio(10.0)
-            )
-            .withSoftwareLimitSwitch(
-                new SoftwareLimitSwitchConfigs()
-                    .withForwardSoftLimitEnable(true)
-                    .withForwardSoftLimitThreshold(Rotations.of(0.25))
-                    .withReverseSoftLimitEnable(true)
-                    .withReverseSoftLimitThreshold(Rotations.of(-0.05542))
-            );
-
-        // Shooter motor configuration (velocity control for flywheel)
-        TalonFXConfiguration shooterConfig = new TalonFXConfiguration()
-            .withCurrentLimits(
-                new CurrentLimitsConfigs()
-                    .withSupplyCurrentLimit(Amps.of(40))
-                    .withSupplyCurrentLimitEnable(true)
-                    .withStatorCurrentLimit(Amps.of(80))
-                    .withStatorCurrentLimitEnable(true)
-            )
-            .withVoltage(
-                new VoltageConfigs()
-                    .withPeakForwardVoltage(Volts.of(12))
-                    .withPeakReverseVoltage(Volts.of(-12))
-            )
-            .withSlot0(
-                new Slot0Configs()
-                    .withKP(0.2)
-                    .withKI(0.0)
-                    .withKD(0.0)
-                    .withKV(0.12)
-                    .withKS(0.25)
-            )
-            .withMotorOutput(
-                new MotorOutputConfigs()
-                    .withInverted(InvertedValue.CounterClockwise_Positive)
-                    .withNeutralMode(NeutralModeValue.Coast)
-            );
-
-        // Uptake motor configuration (velocity control for feeding)
-        TalonFXConfiguration uptakeConfig = new TalonFXConfiguration()
-            .withCurrentLimits(
-                new CurrentLimitsConfigs()
-                    .withSupplyCurrentLimit(Amps.of(30))
-                    .withSupplyCurrentLimitEnable(true)
-                    .withStatorCurrentLimit(Amps.of(60))
-                    .withStatorCurrentLimitEnable(true)
-            )
-            .withVoltage(
-                new VoltageConfigs()
-                    .withPeakForwardVoltage(Volts.of(12))
-                    .withPeakReverseVoltage(Volts.of(-12))
-            )
-            .withSlot0(
-                new Slot0Configs()
-                    .withKP(0.2)
-                    .withKI(0.0)
-                    .withKD(0.0)
-                    .withKV(0.12)
-                    .withKS(0.2)
-            )
-            .withMotorOutput(
-                new MotorOutputConfigs()
-                    .withInverted(InvertedValue.CounterClockwise_Positive)
-                    .withNeutralMode(NeutralModeValue.Coast)
-            );
-
-        // Apply configs
-        rotationMotor.getConfigurator().apply(rotationConfig);
-        rotationMotor.setNeutralMode(NeutralModeValue.Brake);
-        rotationMotor.setPosition(Rotations.of(0.25));
-
-        shooterMotor.getConfigurator().apply(shooterConfig);
-        uptakeMotor.getConfigurator().apply(uptakeConfig);
-
-        // Configure status signal update frequencies
-        BaseStatusSignal.setUpdateFrequencyForAll(
-            50,
-            rotationMotor.getPosition(),
-            rotationMotor.getVelocity(),
-            rotationMotor.getSupplyCurrent(),
-            shooterMotor.getVelocity(),
-            shooterMotor.getSupplyCurrent(),
-            uptakeMotor.getVelocity(),
-            uptakeMotor.getSupplyCurrent()
-        );
-
-        // Optimize CAN bus utilization
-        rotationMotor.optimizeBusUtilization();
-        shooterMotor.optimizeBusUtilization();
-        uptakeMotor.optimizeBusUtilization();
+        this.io = io;
     }
 
     @Override
     public void periodic() {
-        // Cache all sensor values once per cycle to minimize CAN bus reads
-        cachedAngleDeg = rotationMotor.getPosition().getValue().in(Rotations) * 360.0;
-        cachedShooterVelocityRps = shooterMotor.getVelocity().getValue().in(RotationsPerSecond);
-        cachedRotationVelocityRps = rotationMotor.getVelocity().getValue().in(RotationsPerSecond);
-        cachedMotorVoltage = rotationMotor.getMotorVoltage().getValue().in(Volts);
-        cachedMotorCurrent = rotationMotor.getSupplyCurrent().getValue().in(Amps);
+        io.updateInputs(inputs);
+        Logger.processInputs("Turret", inputs);
     }
 
     // ── Manual control ───────────────────────────────────────────────────────
 
     public void setRotationVelocity(double rps) {
-        rotationMotor.setControl(rotationVelocityRequest.withVelocity(RotationsPerSecond.of(rps)));
+        io.setRotationVelocity(rps);
     }
 
     public void setRotationDutyCycle(double dutyCycle) {
         dutyCycle = Math.max(-0.1, Math.min(0.1, dutyCycle));
         cachedDutyCycle = dutyCycle;
-        rotationMotor.setControl(dutyCycleRequest.withOutput(dutyCycle));
+        io.setRotationDutyCycle(dutyCycle);
     }
 
     /**
@@ -266,31 +94,30 @@ public class Turret extends SubsystemBase {
             isHoldingPosition = false;
             double kMaxOutput = 0.3;
             double scaledOutput = Math.max(-1.0, Math.min(1.0, operatorCommand)) * kMaxOutput;
-            rotationMotor.setControl(dutyCycleRequest.withOutput(scaledOutput));
+            io.setRotationDutyCycle(scaledOutput);
         } else {
             if (!isHoldingPosition) {
-                holdPositionRotations = rotationMotor.getPosition().getValue().in(Rotations);
+                holdPositionRotations = inputs.rotationPositionRotations;
                 isHoldingPosition = true;
             }
-            rotationMotor.setControl(positionRequest.withPosition(Rotations.of(holdPositionRotations)));
+            io.setRotationPosition(holdPositionRotations);
         }
-
     }
 
     public void setShooterVelocity(double rps) {
-        shooterMotor.setControl(shooterVelocityRequest.withVelocity(RotationsPerSecond.of(rps)));
+        io.setShooterVelocity(rps);
     }
 
     public void stopRotation() {
-        rotationMotor.setControl(voltageRequest.withOutput(Volts.of(0)));
+        io.stopRotation();
     }
 
     public void stopShooter() {
-        shooterMotor.setControl(voltageRequest.withOutput(Volts.of(0)));
+        io.stopShooter();
     }
 
     public void stopUptake() {
-        uptakeMotor.setControl(voltageRequest.withOutput(Volts.of(0)));
+        io.stopUptake();
     }
 
     public void stop() {
@@ -308,13 +135,18 @@ public class Turret extends SubsystemBase {
     public void setTargetAngle(double angleDeg) {
         targetAngleDeg = angleDeg;
         double targetRotations = angleDeg / 360.0;
-        rotationMotor.setControl(positionRequest.withPosition(Rotations.of(targetRotations)));
+        io.setRotationPosition(targetRotations);
     }
 
     // ── Status ───────────────────────────────────────────────────────────────
 
-    public double getCurrentAngleDeg() { return cachedAngleDeg; }
-    public double getShooterVelocityRps() { return cachedShooterVelocityRps; }
+    public double getCurrentAngleDeg() {
+        return inputs.rotationPositionRotations * 360.0;
+    }
+
+    public double getShooterVelocityRps() {
+        return inputs.shooterVelocityRps;
+    }
 
     public boolean isAtTarget() {
         return Math.abs(getCurrentAngleDeg() - targetAngleDeg) < kAngleToleranceDeg;
@@ -371,15 +203,13 @@ public class Turret extends SubsystemBase {
     public Command shooterOnCommand() {
         Command warm = Commands.sequence(
             runOnce(() -> setShooterVelocity(kShooterVelocityRps)),
-            runOnce(() -> uptakeMotor.setControl(
-                uptakeVelocityRequest.withVelocity(RotationsPerSecond.of(kUptakeVelocityRps))))
+            runOnce(() -> io.setUptakeVelocity(kUptakeVelocityRps))
         );
 
         Command cold = Commands.sequence(
             runOnce(() -> setShooterVelocity(kShooterVelocityRps)),
             Commands.waitUntil(this::isShooterReady),
-            runOnce(() -> uptakeMotor.setControl(
-                uptakeVelocityRequest.withVelocity(RotationsPerSecond.of(kUptakeVelocityRps))))
+            runOnce(() -> io.setUptakeVelocity(kUptakeVelocityRps))
         );
 
         return Commands.either(warm, cold, this::isShooterReady)
@@ -409,7 +239,7 @@ public class Turret extends SubsystemBase {
         return runOnce(() -> {
             stopRotation();
             holdPositionRotations = 0;
-            rotationMotor.setPosition(Rotations.of(0));
+            io.zeroRotationPosition(0);
             isHoldingPosition = true;
         }).withName("ZeroRotation");
     }
@@ -466,8 +296,7 @@ public class Turret extends SubsystemBase {
                 double aimAngle = computeAimAngle(robotPoseSupplier.get(), targetPose);
                 setTargetAngle(aimAngle);
                 setShooterVelocity(kShooterVelocityRps);
-                uptakeMotor.setControl(
-                    uptakeVelocityRequest.withVelocity(RotationsPerSecond.of(kUptakeVelocityRps)));
+                io.setUptakeVelocity(kUptakeVelocityRps);
             })
         )
         .finallyDo(interrupted -> {
@@ -541,8 +370,7 @@ public class Turret extends SubsystemBase {
                 double aimAngle = computeAimAngle(robotPose, targetPose);
                 setTargetAngle(aimAngle);
                 setShooterVelocity(kPassVelocityRps);
-                uptakeMotor.setControl(
-                    uptakeVelocityRequest.withVelocity(RotationsPerSecond.of(kUptakeVelocityRps)));
+                io.setUptakeVelocity(kUptakeVelocityRps);
             })
         )
         .finallyDo(interrupted -> {

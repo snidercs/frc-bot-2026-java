@@ -4,123 +4,48 @@
 
 package frc.robot.subsystems;
 
-import static edu.wpi.first.units.Units.*;
-
-import com.ctre.phoenix6.CANBus;
-import com.ctre.phoenix6.BaseStatusSignal;
-import com.ctre.phoenix6.configs.CurrentLimitsConfigs;
-import com.ctre.phoenix6.configs.FeedbackConfigs;
-import com.ctre.phoenix6.configs.MotorOutputConfigs;
-import com.ctre.phoenix6.configs.SoftwareLimitSwitchConfigs;
-import com.ctre.phoenix6.configs.TalonFXConfiguration;
-import com.ctre.phoenix6.configs.VoltageConfigs;
-import com.ctre.phoenix6.controls.DutyCycleOut;
-import com.ctre.phoenix6.hardware.TalonFX;
-import com.ctre.phoenix6.signals.InvertedValue;
-import com.ctre.phoenix6.signals.NeutralModeValue;
-
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 
-import org.littletonrobotics.junction.AutoLogOutput;
-
-import frc.robot.Config;
+import org.littletonrobotics.junction.Logger;
 
 /**
  * Climber subsystem with a single Kraken X60 motor.
+ *
+ * Hardware interaction is delegated to a {@link ClimberIO} implementation
+ * so that sensor inputs are deterministically replayable via AdvantageKit.
  *
  * Ported from climber.hpp/cpp in the C++ project.
  */
 public class Climber extends SubsystemBase {
 
-    // Single Kraken x60 motor for climber
-    private final TalonFX m_motor = new TalonFX(Config.CLIMBER_DEVICE_ID, new CANBus(Config.CLIMBER_CAN_BUS));
-
-    // Control request (reusable)
-    private final DutyCycleOut m_dutyCycleRequest = new DutyCycleOut(0.0);
+    private final ClimberIO io;
+    private final ClimberIOInputsAutoLogged inputs = new ClimberIOInputsAutoLogged();
 
     // Constants
     private static final double kClimbDutyCycle = 0.99;    // Positive = down/climbing
     private static final double kLowerDutyCycle = -0.99;   // Negative = up/lowering
-    private static final double kForwardSoftLimit = 0.0;   // rotations
-    private static final double kReverseSoftLimit = -3.109043; // rotations
+    static final double kForwardSoftLimit = 0.0;           // rotations
+    static final double kReverseSoftLimit = -3.109043;     // rotations
 
-    // Cached sensor values (updated in periodic to avoid redundant CAN reads)
-    @AutoLogOutput(key = "Climber/VelocityRps")
-    private double cachedVelocityRps = 0;
-    @AutoLogOutput(key = "Climber/PositionRotations")
-    private double cachedPositionRotations = 0;
-    @AutoLogOutput(key = "Climber/CurrentAmps")
-    private double cachedCurrentAmps = 0;
-    @AutoLogOutput(key = "Climber/Voltage")
-    private double cachedVoltage = 0;
-
-    public Climber() {
+    public Climber(ClimberIO io) {
         setName("Climber");
-        configureMotor();
-    }
-
-    // NOTE: Changes to motor config or zeroing should be reflected in
-    //       README.md → "Power-Up Initialization".
-    private void configureMotor() {
-        TalonFXConfiguration config = new TalonFXConfiguration()
-            .withCurrentLimits(
-                new CurrentLimitsConfigs()
-                    .withSupplyCurrentLimit(Amps.of(40))
-                    .withSupplyCurrentLimitEnable(true)
-                    .withStatorCurrentLimit(Amps.of(80))
-                    .withStatorCurrentLimitEnable(true)
-            )
-            .withVoltage(
-                new VoltageConfigs()
-                    .withPeakForwardVoltage(Volts.of(12))
-                    .withPeakReverseVoltage(Volts.of(-12))
-            )
-            .withMotorOutput(
-                new MotorOutputConfigs()
-                    .withInverted(InvertedValue.CounterClockwise_Positive)
-                    .withNeutralMode(NeutralModeValue.Brake)
-            )
-            .withFeedback(
-                new FeedbackConfigs()
-                    .withSensorToMechanismRatio(180.0)
-            )
-            .withSoftwareLimitSwitch(
-                new SoftwareLimitSwitchConfigs()
-                    .withForwardSoftLimitEnable(true)
-                    .withForwardSoftLimitThreshold(Rotations.of(kForwardSoftLimit))
-                    .withReverseSoftLimitEnable(true)
-                    .withReverseSoftLimitThreshold(Rotations.of(kReverseSoftLimit))
-            );
-
-        m_motor.getConfigurator().apply(config);
-        m_motor.setPosition(Rotations.of(0.0));
-
-        // Configure status signal update frequencies
-        BaseStatusSignal.setUpdateFrequencyForAll(
-            50,
-            m_motor.getVelocity(),
-            m_motor.getSupplyCurrent(),
-            m_motor.getMotorVoltage()
-        );
+        this.io = io;
     }
 
     @Override
     public void periodic() {
-        // Cache all sensor values once per cycle to minimize CAN bus reads
-        cachedVelocityRps = m_motor.getVelocity().getValue().in(RotationsPerSecond);
-        cachedPositionRotations = m_motor.getPosition().getValue().in(Rotations);
-        cachedCurrentAmps = m_motor.getSupplyCurrent().getValue().in(Amps);
-        cachedVoltage = m_motor.getMotorVoltage().getValue().in(Volts);
+        io.updateInputs(inputs);
+        Logger.processInputs("Climber", inputs);
     }
 
     // Manual control
     public void setDutyCycle(double dutyCycle) {
-        m_motor.setControl(m_dutyCycleRequest.withOutput(dutyCycle));
+        io.setDutyCycle(dutyCycle);
     }
 
     public void stop() {
-        m_motor.setControl(m_dutyCycleRequest.withOutput(0.0));
+        io.stop();
     }
 
     // Command factories
@@ -142,25 +67,12 @@ public class Climber extends SubsystemBase {
     }
 
     public Command disableSoftLimitsCommand() {
-        return runOnce(() -> {
-            m_motor.getConfigurator().apply(
-                new SoftwareLimitSwitchConfigs()
-                    .withForwardSoftLimitEnable(false)
-                    .withReverseSoftLimitEnable(false)
-            );
-        }).withName("DisableSoftLimits");
+        return runOnce(() -> io.disableSoftLimits())
+            .withName("DisableSoftLimits");
     }
 
     public Command enableSoftLimitsAndResetCommand() {
-        return runOnce(() -> {
-            m_motor.setPosition(Rotations.of(0.0));
-            m_motor.getConfigurator().apply(
-                new SoftwareLimitSwitchConfigs()
-                    .withForwardSoftLimitEnable(true)
-                    .withForwardSoftLimitThreshold(Rotations.of(kForwardSoftLimit))
-                    .withReverseSoftLimitEnable(true)
-                    .withReverseSoftLimitThreshold(Rotations.of(kReverseSoftLimit))
-            );
-        }).withName("EnableSoftLimitsAndReset");
+        return runOnce(() -> io.enableSoftLimitsAndResetPosition(kForwardSoftLimit, kReverseSoftLimit))
+            .withName("EnableSoftLimitsAndReset");
     }
 }

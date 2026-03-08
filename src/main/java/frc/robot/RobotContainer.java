@@ -23,9 +23,12 @@ import com.pathplanner.lib.commands.PathPlannerAuto;
 
 import frc.robot.generated.TunerConstants;
 import frc.robot.subsystems.Climber;
+import frc.robot.subsystems.ClimberIOTalonFX;
 import frc.robot.subsystems.CommandSwerveDrivetrain;
 import frc.robot.subsystems.Intake;
+import frc.robot.subsystems.IntakeIOTalonFX;
 import frc.robot.subsystems.Turret;
+import frc.robot.subsystems.TurretIOTalonFX;
 
 /**
  * This class is where the bulk of the robot should be declared. Since Command-based is a
@@ -53,9 +56,9 @@ public class RobotContainer {
 
     // ── Subsystems ───────────────────────────────────────────────────────────
     private final CommandSwerveDrivetrain drivetrain;
-    private final Intake intake = new Intake();
-    private final Climber climber = new Climber();
-    private final Turret turret = new Turret();
+    private final Intake intake = new Intake(new IntakeIOTalonFX());
+    private final Climber climber = new Climber(new ClimberIOTalonFX());
+    private final Turret turret = new Turret(new TurretIOTalonFX());
     private final VisionMulti vision = new VisionMulti();
 
     // ── Auto chooser ─────────────────────────────────────────────────────────
