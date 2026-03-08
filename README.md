@@ -157,6 +157,82 @@ The turret rotation motor uses a position PID. If the turret was bumped during t
 | Intake clear | No game pieces jammed in intake or uptake |
 | Climber retracted | Climber at bottom limit before match start |
 
+## Robot Localization (How the Robot Knows Its Position)
+
+The robot continuously estimates its field-relative position (X, Y, heading) by fusing two independent data sources: **wheel odometry** and **AprilTag vision**.
+
+### Wheel odometry
+
+The swerve drivetrain runs a high-frequency odometry loop at **250 Hz** ([`RobotContainer.java`](src/main/java/frc/robot/RobotContainer.java#L68)). Each cycle, the `CommandSwerveDrivetrain` reads the four drive-motor encoders and four CANcoders to compute incremental movement. Because this runs on-device in the CTRE Phoenix 6 stack, it captures fine-grained motion even between the main robot loop ticks.
+
+Odometry alone drifts over time — wheel slip, carpet texture changes, and minor gear backlash accumulate error. Vision corrections compensate for this drift.
+
+### AprilTag vision
+
+Four PhotonVision cameras (Front-Left, Front-Right, Back-Left, Back-Right) are mounted at fixed positions on the chassis. Each camera's 3D transform relative to robot center is defined in [`Vision.java`](src/main/java/frc/robot/Vision.java#L82-L106) (`ROBOT_TO_CAMERA[]`).
+
+The [`VisionMulti`](src/main/java/frc/robot/VisionMulti.java) class implements `Vision.VisionIO` and manages all four cameras:
+
+1. **Capture** — Each camera is polled every robot cycle via `PhotonCamera.getAllUnreadResults()` ([`VisionMulti.java`](src/main/java/frc/robot/VisionMulti.java#L93)).
+2. **Gate** — Results are filtered to reject measurements that are stale (latency > 0.5 s), ambiguous (ambiguity > 0.3), or produce poses outside the field boundaries (16.46 m × 8.21 m) ([`VisionMulti.java`](src/main/java/frc/robot/VisionMulti.java#L97-L126)).
+3. **Estimate** — Accepted results are passed to a `PhotonPoseEstimator`, which uses the known AprilTag field layout (`k2026RebuiltAndymark`) and the camera mounting transform to compute a robot pose on the field ([`VisionMulti.java`](src/main/java/frc/robot/VisionMulti.java#L111-L115)).
+4. **Standard deviations** — Each measurement is tagged with distance-scaled uncertainty values (X/Y: 1 cm base + 5 cm per meter; heading: 0.01 rad base + 0.02 rad per meter) so farther tags carry less weight ([`VisionMulti.java`](src/main/java/frc/robot/VisionMulti.java#L146-L150)).
+
+### Sensor fusion
+
+The odometry and vision streams are fused in [`Robot.robotPeriodic()`](src/main/java/frc/robot/Robot.java#L77-L86). Every cycle, vision measurements are fed to `drivetrain.addVisionMeasurement()` along with their standard deviations. The underlying WPILib pose estimator uses a Kalman-filter-style update: odometry provides the prediction step, and each vision measurement applies a correction weighted by its uncertainty. The result is a single best-estimate `Pose2d` available via `drivetrain.getState().Pose`.
+
+### Field-centric heading
+
+The driver can reset the field-centric forward direction by pressing the seed button (stick 0 button 8, or left bumper on gamepad), which calls `drivetrain.seedFieldCentric()` ([`RobotContainer.java`](src/main/java/frc/robot/RobotContainer.java#L211)). This re-zeros the gyro heading so "forward" on the stick matches the robot's current facing. The operator perspective is also automatically adjusted for alliance color in [`CommandSwerveDrivetrain.periodic()`](src/main/java/frc/robot/subsystems/CommandSwerveDrivetrain.java#L194-L207).
+
+### Telemetry
+
+The fused robot pose and swerve module states are published to NetworkTables by the [`Telemetry`](src/main/java/frc/robot/Telemetry.java) class, which populates the `DriveState/Pose`, `DriveState/Speeds`, and `Pose/robotPose` topics. Individual camera poses and rejection counts are also published under `Vision/` keys by `VisionMulti`.
+
+### Data flow summary
+
+```
+┌──────────────────────┐     ┌──────────────────────────┐
+│  Swerve Module       │     │  PhotonVision Cameras    │
+│  Encoders + CANcoders│     │  (FL, FR, BL, BR)        │
+│  250 Hz              │     │  ~30 fps each            │
+└─────────┬────────────┘     └────────────┬─────────────┘
+          │ (a)                           │ (b)
+          ▼                               ▼
+┌──────────────────────┐     ┌──────────────────────────┐
+│  Wheel Odometry      │     │  VisionMulti             │
+│  (prediction step)   │     │  (gate → estimate → σ)   │
+└─────────┬────────────┘     └────────────┬─────────────┘
+          │ (c)                           │ (d)
+          └───────────┬───────────────────┘
+                      ▼
+          ┌───────────────────────┐
+          │  WPILib Pose Estimator│
+          │  (Kalman filter)      │
+          │  → Pose2d             │
+          └───────────┬───────────┘
+                      │
+          ┌───────────┴───────────┐
+          │ (e)                   │ (f)
+          ▼                       ▼
+┌──────────────────┐   ┌──────────────────┐
+│  Autonomous      │   │  Turret Aiming   │
+│  (PathPlanner)   │   │  (hub/tower)     │
+└──────────────────┘   └──────────────────┘
+```
+
+Each arrow is a method call — nothing is pushed asynchronously. Downstream consumers **pull** the latest fused pose from `drivetrain.getState().Pose` whenever they need it.
+
+| Arrow | What happens | Where in code |
+|---|---|---|
+| **(a)** Encoders → Odometry | CTRE's `SwerveDrivetrain` base class reads drive-motor encoders + CANcoders at 250 Hz internally | built into Phoenix 6 `SwerveDrivetrain` |
+| **(b)** Cameras → VisionMulti | `PhotonCamera.getAllUnreadResults()` polls each camera for new frames | [`VisionMulti.getMeasurements()`](src/main/java/frc/robot/VisionMulti.java#L93) |
+| **(c)** Odometry → Pose Estimator | Automatic — odometry is the prediction step inside the `SwerveDrivetrain` pose estimator | built into Phoenix 6 `SwerveDrivetrain` |
+| **(d)** VisionMulti → Pose Estimator | `drivetrain.addVisionMeasurement(pose, timestamp, stdDevs)` feeds each accepted measurement into the Kalman filter | [`Robot.robotPeriodic()`](src/main/java/frc/robot/Robot.java#L80) |
+| **(e)** Pose Estimator → PathPlanner | A lambda `() -> getState().Pose` is registered as PathPlanner's pose supplier during init | [`configurePathPlanner()`](src/main/java/frc/robot/subsystems/CommandSwerveDrivetrain.java#L220) |
+| **(f)** Pose Estimator → Turret Aiming | Aim commands read `drivetrain.getState().Pose` and compute the angle/distance to `Vision.hubPosition()` | [`Robot.robotPeriodic()`](src/main/java/frc/robot/Robot.java#L88-L90) |
+
 ## Contributors
 
 The original C++ codebase was written by:
