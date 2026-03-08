@@ -34,6 +34,9 @@ The robot supports two controller modes selected at compile time via `Config.GAM
 - **Dual flight sticks** (default) — stick 0 for translation + intake/climber, stick 1 for rotation + shooter
 - **Xbox gamepad** — left stick translation, right stick rotation, bumpers/triggers for mechanisms
 
+See [CONTROLS.md](CONTROLS.md) for the complete button/axis mapping, turret
+aiming modes, autonomous named commands, and configuration reference.
+
 ## Building
 
 ```bash
