@@ -10,7 +10,8 @@ import java.util.List;
 import edu.wpi.first.apriltag.AprilTagFieldLayout;
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Transform3d;
-import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
+
+import org.littletonrobotics.junction.Logger;
 
 import org.photonvision.PhotonCamera;
 import org.photonvision.PhotonPoseEstimator;
@@ -138,16 +139,19 @@ public class VisionMulti implements Vision.VisionIO {
 
                 // Telemetry: log each accepted pose
                 String camName = unit.camera.getName();
-                SmartDashboard.putNumber("Vision/" + camName + "/X (m)", pose2d.getX());
-                SmartDashboard.putNumber("Vision/" + camName + "/Y (m)", pose2d.getY());
-                SmartDashboard.putNumber("Vision/" + camName + "/Rot (deg)", pose2d.getRotation().getDegrees());
+                Logger.recordOutput("Vision/" + camName + "/X (m)", pose2d.getX());
+                Logger.recordOutput("Vision/" + camName + "/Y (m)", pose2d.getY());
+                Logger.recordOutput("Vision/" + camName + "/Rot (deg)", pose2d.getRotation().getDegrees());
 
                 acceptedCount++;
             }
         }
 
-        SmartDashboard.putNumber("Vision/Accepted", acceptedCount);
-        SmartDashboard.putNumber("Vision/Rejected OutOfBounds", rejectedOutOfBounds);
+        Logger.recordOutput("Vision/Accepted", acceptedCount);
+        Logger.recordOutput("Vision/RejectedNoTargets", rejectedNoTargets);
+        Logger.recordOutput("Vision/RejectedStale", rejectedStale);
+        Logger.recordOutput("Vision/RejectedAmbiguous", rejectedAmbiguous);
+        Logger.recordOutput("Vision/RejectedOutOfBounds", rejectedOutOfBounds);
 
         return measurements;
     }

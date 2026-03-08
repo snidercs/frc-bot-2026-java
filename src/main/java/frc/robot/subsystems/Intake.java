@@ -20,10 +20,11 @@ import com.ctre.phoenix6.signals.InvertedValue;
 import com.ctre.phoenix6.signals.NeutralModeValue;
 
 import edu.wpi.first.wpilibj.Timer;
-import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.Commands;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
+
+import org.littletonrobotics.junction.AutoLogOutput;
 
 import frc.robot.Config;
 
@@ -45,6 +46,16 @@ public class Intake extends SubsystemBase {
     // Constants
     private final double kIntakeVoltage = Config.INTAKE_VOLTAGE;
     private static final double kEjectVoltage = 2.0;
+
+    // Cached sensor values (updated in periodic to avoid redundant CAN reads)
+    @AutoLogOutput(key = "Intake/TopVelocityRps")
+    private double cachedTopVelocityRps = 0;
+    @AutoLogOutput(key = "Intake/BottomVelocityRps")
+    private double cachedBottomVelocityRps = 0;
+    @AutoLogOutput(key = "Intake/TopCurrentAmps")
+    private double cachedTopCurrentAmps = 0;
+    @AutoLogOutput(key = "Intake/BottomCurrentAmps")
+    private double cachedBottomCurrentAmps = 0;
 
     public Intake() {
         setName("Intake");
@@ -128,9 +139,11 @@ public class Intake extends SubsystemBase {
 
     @Override
     public void periodic() {
-        // Telemetry for debugging and monitoring (disabled by default)
-        // SmartDashboard.putNumber("Intake/Top Velocity (rps)", m_topMotor.getVelocity().getValue().in(RotationsPerSecond));
-        // SmartDashboard.putNumber("Intake/Bottom Velocity (rps)", m_bottomMotor.getVelocity().getValue().in(RotationsPerSecond));
+        // Cache all sensor values once per cycle to minimize CAN bus reads
+        cachedTopVelocityRps = m_topMotor.getVelocity().getValue().in(RotationsPerSecond);
+        cachedBottomVelocityRps = m_bottomMotor.getVelocity().getValue().in(RotationsPerSecond);
+        cachedTopCurrentAmps = m_topMotor.getSupplyCurrent().getValue().in(Amps);
+        cachedBottomCurrentAmps = m_bottomMotor.getSupplyCurrent().getValue().in(Amps);
     }
 
     // Manual control

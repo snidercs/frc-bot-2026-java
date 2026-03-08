@@ -29,10 +29,11 @@ import com.ctre.phoenix6.signals.NeutralModeValue;
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.geometry.Translation2d;
-import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.Commands;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
+
+import org.littletonrobotics.junction.AutoLogOutput;
 
 import frc.robot.Config;
 import frc.robot.Vision;
@@ -68,18 +69,29 @@ public class Turret extends SubsystemBase {
     private final DutyCycleOut dutyCycleRequest = new DutyCycleOut(0);
 
     // State
+    @AutoLogOutput(key = "Turret/AutoAimEnabled")
     private boolean autoAimEnabled = false;
+    @AutoLogOutput(key = "Turret/TargetAngleDeg")
     private double targetAngleDeg = 0;
 
     // Cached sensor values (updated in periodic to avoid redundant CAN reads)
+    @AutoLogOutput(key = "Turret/CurrentAngleDeg")
     private double cachedAngleDeg = 0;
+    @AutoLogOutput(key = "Turret/ShooterVelocityRps")
     private double cachedShooterVelocityRps = 0;
+    @AutoLogOutput(key = "Turret/RotationVelocityRps")
     private double cachedRotationVelocityRps = 0;
+    @AutoLogOutput(key = "Turret/RotationVoltage")
     private double cachedMotorVoltage = 0;
+    @AutoLogOutput(key = "Turret/RotationCurrentAmps")
     private double cachedMotorCurrent = 0;
+    @AutoLogOutput(key = "Turret/CommandedDutyCycle")
+    private double cachedDutyCycle = 0;
 
     // Position hold state (for locking when no operator input)
+    @AutoLogOutput(key = "Turret/HoldingPosition")
     private boolean isHoldingPosition = false;
+    @AutoLogOutput(key = "Turret/HoldPositionRotations")
     private double holdPositionRotations = 0;
 
     // Constants
@@ -228,11 +240,6 @@ public class Turret extends SubsystemBase {
         cachedRotationVelocityRps = rotationMotor.getVelocity().getValue().in(RotationsPerSecond);
         cachedMotorVoltage = rotationMotor.getMotorVoltage().getValue().in(Volts);
         cachedMotorCurrent = rotationMotor.getSupplyCurrent().getValue().in(Amps);
-
-        // Telemetry (disabled by default)
-        // SmartDashboard.putBoolean("Turret/Auto Aim Enabled", autoAimEnabled);
-        // SmartDashboard.putNumber("Turret/Current Angle (deg)", cachedAngleDeg);
-        // SmartDashboard.putNumber("Turret/Target Angle (deg)", targetAngleDeg);
     }
 
     // ── Manual control ───────────────────────────────────────────────────────
@@ -243,7 +250,7 @@ public class Turret extends SubsystemBase {
 
     public void setRotationDutyCycle(double dutyCycle) {
         dutyCycle = Math.max(-0.1, Math.min(0.1, dutyCycle));
-        SmartDashboard.putNumber("Turret/Commanded Duty Cycle", dutyCycle);
+        cachedDutyCycle = dutyCycle;
         rotationMotor.setControl(dutyCycleRequest.withOutput(dutyCycle));
     }
 
@@ -268,8 +275,6 @@ public class Turret extends SubsystemBase {
             rotationMotor.setControl(positionRequest.withPosition(Rotations.of(holdPositionRotations)));
         }
 
-        SmartDashboard.putBoolean("Turret/Holding Position", isHoldingPosition);
-        SmartDashboard.putNumber("Turret/Hold Position (turns)", holdPositionRotations);
     }
 
     public void setShooterVelocity(double rps) {

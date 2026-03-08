@@ -8,7 +8,6 @@ import edu.wpi.first.math.VecBuilder;
 import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.RobotController;
 import edu.wpi.first.wpilibj2.command.CommandScheduler;
-import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.CommandScheduler;
 
@@ -41,6 +40,7 @@ public class Robot extends LoggedRobot {
     public Robot() {
         // AdvantageKit logger configuration — must run before any other init
         Logger.recordMetadata("ProjectName", "frc-bot-2026-java");
+        Logger.recordMetadata("ControllerType", Config.GAMEPAD ? "Gamepad" : "Flightsticks");
 
         if (isReal()) {
             Logger.addDataReceiver(new WPILOGWriter()); // Log to USB stick ("/U/logs")
@@ -65,7 +65,6 @@ public class Robot extends LoggedRobot {
 
         container = new RobotContainer();
 
-        SmartDashboard.putString("Controller", Config.GAMEPAD ? "Gamepad" : "Flightsticks");
         Config.display();
     }
 
@@ -87,7 +86,7 @@ public class Robot extends LoggedRobot {
             // Estimated distance from fused robot pose to the hub
             var robotPose = container.getDrivetrain().getState().Pose;
             double distanceToHub = robotPose.getTranslation().getDistance(Vision.hubPosition());
-            SmartDashboard.putNumber("Robot/DistanceToHub (m)", distanceToHub);
+            Logger.recordOutput("Robot/DistanceToHub", distanceToHub);
         }
     }
 

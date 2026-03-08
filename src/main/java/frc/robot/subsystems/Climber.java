@@ -19,9 +19,10 @@ import com.ctre.phoenix6.hardware.TalonFX;
 import com.ctre.phoenix6.signals.InvertedValue;
 import com.ctre.phoenix6.signals.NeutralModeValue;
 
-import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
+
+import org.littletonrobotics.junction.AutoLogOutput;
 
 import frc.robot.Config;
 
@@ -43,6 +44,16 @@ public class Climber extends SubsystemBase {
     private static final double kLowerDutyCycle = -0.99;   // Negative = up/lowering
     private static final double kForwardSoftLimit = 0.0;   // rotations
     private static final double kReverseSoftLimit = -3.109043; // rotations
+
+    // Cached sensor values (updated in periodic to avoid redundant CAN reads)
+    @AutoLogOutput(key = "Climber/VelocityRps")
+    private double cachedVelocityRps = 0;
+    @AutoLogOutput(key = "Climber/PositionRotations")
+    private double cachedPositionRotations = 0;
+    @AutoLogOutput(key = "Climber/CurrentAmps")
+    private double cachedCurrentAmps = 0;
+    @AutoLogOutput(key = "Climber/Voltage")
+    private double cachedVoltage = 0;
 
     public Climber() {
         setName("Climber");
@@ -96,8 +107,11 @@ public class Climber extends SubsystemBase {
 
     @Override
     public void periodic() {
-        // Telemetry (disabled by default)
-        // SmartDashboard.putNumber("Climber/Velocity (rps)", m_motor.getVelocity().getValue().in(RotationsPerSecond));
+        // Cache all sensor values once per cycle to minimize CAN bus reads
+        cachedVelocityRps = m_motor.getVelocity().getValue().in(RotationsPerSecond);
+        cachedPositionRotations = m_motor.getPosition().getValue().in(Rotations);
+        cachedCurrentAmps = m_motor.getSupplyCurrent().getValue().in(Amps);
+        cachedVoltage = m_motor.getMotorVoltage().getValue().in(Volts);
     }
 
     // Manual control
