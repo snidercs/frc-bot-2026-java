@@ -125,13 +125,51 @@ public final class Vision {
     // ── Landmarks ────────────────────────────────────────────────────────────
     /**
      * Returns the hub (goal) position for the current alliance.
+     * Computed from the center of the AprilTag ring on each Hub structure.
      * Defaults to the red alliance position when alliance is unknown.
      */
     public static Translation2d hubPosition() {
         Optional<DriverStation.Alliance> alliance = DriverStation.getAlliance();
         if (alliance.isPresent() && alliance.get() == DriverStation.Alliance.Blue) {
-            return new Translation2d(Units.inchesToMeters(182.105), Units.inchesToMeters(158.845));
+            // Blue Hub center: avg of tags 18–21, 24–27 → (181.555", 158.325")
+            return new Translation2d(4.6115, 4.0215);
         }
-        return new Translation2d(Units.inchesToMeters(469.115), Units.inchesToMeters(158.845));
+        // Red Hub center: avg of tags 2–5, 8–11 → (468.565", 158.325")
+        return new Translation2d(11.9015, 4.0215);
+    }
+
+    /**
+     * Returns the tower (pass target) position for the current alliance,
+     * selecting the tower nearest to the robot's current Y position.
+     *
+     * Each alliance has two Tower structures located at the same X as the Hub
+     * but near the upper and lower field edges:
+     * <ul>
+     *   <li>Upper tower — Y ≈ 291.79 in (7.4115 m)</li>
+     *   <li>Lower tower — Y ≈ 24.85 in (0.6312 m)</li>
+     * </ul>
+     *
+     * @param robotY the robot's current field-relative Y position (meters)
+     * @return the Translation2d of the nearer tower for this alliance
+     */
+    public static Translation2d towerPosition(double robotY) {
+        final double kFieldCenterY = 4.0215; // meters (field width / 2)
+        final double kUpperTowerY = 7.4115;  // meters (≈291.79 in)
+        final double kLowerTowerY = 0.6312;  // meters (≈24.85 in)
+
+        double towerY = (robotY > kFieldCenterY) ? kUpperTowerY : kLowerTowerY;
+
+        Optional<DriverStation.Alliance> alliance = DriverStation.getAlliance();
+        if (alliance.isPresent() && alliance.get() == DriverStation.Alliance.Blue) {
+            // Blue towers at X ≈ 181.56 in (4.6116 m)
+            return new Translation2d(4.6116, towerY);
+        }
+        // Red towers at X ≈ 468.56 in (11.9015 m)
+        return new Translation2d(11.9015, towerY);
+    }
+
+    /** Overload that always returns the upper tower when no robot Y is available. */
+    public static Translation2d towerPosition() {
+        return towerPosition(Double.MAX_VALUE); // defaults to upper tower
     }
 }

@@ -406,4 +406,142 @@ public class Turret extends SubsystemBase {
             isHoldingPosition = true;
         }).withName("ZeroRotation");
     }
+
+    // ── Aim-at-Hub mode ──────────────────────────────────────────────────────
+
+    /**
+     * Continuously aims the turret at the Hub for the current alliance.
+     * The turret tracks the Hub every cycle using the live robot pose.
+     * Also spins up the shooter so the robot is ready to fire immediately.
+     *
+     * @param robotPoseSupplier supplies the current field-relative robot pose
+     * @return a command that runs until cancelled
+     */
+    public Command aimAtHubCommand(Supplier<Pose2d> robotPoseSupplier) {
+        return run(() -> {
+            Pose2d targetPose = new Pose2d(Vision.hubPosition(), new Rotation2d());
+            double aimAngle = computeAimAngle(robotPoseSupplier.get(), targetPose);
+            setTargetAngle(aimAngle);
+            setShooterVelocity(kShooterVelocityRps);
+        })
+        .finallyDo(interrupted -> {
+            stopShooter();
+        })
+        .withName("AimAtHub");
+    }
+
+    /**
+     * Returns true when the turret is aimed at the Hub and the shooter is at speed.
+     */
+    public boolean isReadyToShootHub() {
+        return isAtTarget() && isShooterReady();
+    }
+
+    /**
+     * Aims at the Hub and fires once ready (uptake feeds the game piece).
+     * Stops shooter and uptake when cancelled.
+     *
+     * @param robotPoseSupplier supplies the current field-relative robot pose
+     * @return a command that runs until cancelled
+     */
+    public Command aimAndShootHubCommand(Supplier<Pose2d> robotPoseSupplier) {
+        return Commands.sequence(
+            // Phase 1: aim and spin up until on-target and at speed
+            run(() -> {
+                Pose2d targetPose = new Pose2d(Vision.hubPosition(), new Rotation2d());
+                double aimAngle = computeAimAngle(robotPoseSupplier.get(), targetPose);
+                setTargetAngle(aimAngle);
+                setShooterVelocity(kShooterVelocityRps);
+            }).until(this::isReadyToShootHub),
+            // Phase 2: feed game piece through uptake while continuing to aim
+            run(() -> {
+                Pose2d targetPose = new Pose2d(Vision.hubPosition(), new Rotation2d());
+                double aimAngle = computeAimAngle(robotPoseSupplier.get(), targetPose);
+                setTargetAngle(aimAngle);
+                setShooterVelocity(kShooterVelocityRps);
+                uptakeMotor.setControl(
+                    uptakeVelocityRequest.withVelocity(RotationsPerSecond.of(kUptakeVelocityRps)));
+            })
+        )
+        .finallyDo(interrupted -> {
+            stopUptake();
+            stopShooter();
+        })
+        .withName("AimAndShootHub");
+    }
+
+    // ── Pass-to-Tower mode ───────────────────────────────────────────────────
+
+    /** Shooter velocity for passing fuel (lower than a full Hub shot). */
+    private static final double kPassVelocityRps = 35;
+
+    /**
+     * Continuously aims the turret at the tower (pass target) for the current
+     * alliance and spins the shooter at a reduced pass speed.
+     * Use this when you want to lob fuel to a teammate or staging area
+     * for later Hub shots.
+     *
+     * @param robotPoseSupplier supplies the current field-relative robot pose
+     * @return a command that runs until cancelled
+     */
+    public Command aimPassCommand(Supplier<Pose2d> robotPoseSupplier) {
+        return run(() -> {
+            Pose2d robotPose = robotPoseSupplier.get();
+            Translation2d tower = Vision.towerPosition(robotPose.getY());
+            Pose2d targetPose = new Pose2d(tower, new Rotation2d());
+            double aimAngle = computeAimAngle(robotPose, targetPose);
+            setTargetAngle(aimAngle);
+            setShooterVelocity(kPassVelocityRps);
+        })
+        .finallyDo(interrupted -> {
+            stopShooter();
+        })
+        .withName("AimPass");
+    }
+
+    /**
+     * Returns true when the turret is aimed at the pass target and the shooter
+     * is at the pass speed.
+     */
+    public boolean isReadyToPass() {
+        return isAtTarget()
+            && Math.abs(getShooterVelocityRps() - kPassVelocityRps) < kShooterToleranceRps;
+    }
+
+    /**
+     * Aims at the tower and passes fuel once ready.
+     * Stops shooter and uptake when cancelled.
+     *
+     * @param robotPoseSupplier supplies the current field-relative robot pose
+     * @return a command that runs until cancelled
+     */
+    public Command aimAndPassCommand(Supplier<Pose2d> robotPoseSupplier) {
+        return Commands.sequence(
+            // Phase 1: aim and spin up at pass speed
+            run(() -> {
+                Pose2d robotPose = robotPoseSupplier.get();
+                Translation2d tower = Vision.towerPosition(robotPose.getY());
+                Pose2d targetPose = new Pose2d(tower, new Rotation2d());
+                double aimAngle = computeAimAngle(robotPose, targetPose);
+                setTargetAngle(aimAngle);
+                setShooterVelocity(kPassVelocityRps);
+            }).until(this::isReadyToPass),
+            // Phase 2: feed game piece
+            run(() -> {
+                Pose2d robotPose = robotPoseSupplier.get();
+                Translation2d tower = Vision.towerPosition(robotPose.getY());
+                Pose2d targetPose = new Pose2d(tower, new Rotation2d());
+                double aimAngle = computeAimAngle(robotPose, targetPose);
+                setTargetAngle(aimAngle);
+                setShooterVelocity(kPassVelocityRps);
+                uptakeMotor.setControl(
+                    uptakeVelocityRequest.withVelocity(RotationsPerSecond.of(kUptakeVelocityRps)));
+            })
+        )
+        .finallyDo(interrupted -> {
+            stopUptake();
+            stopShooter();
+        })
+        .withName("AimAndPass");
+    }
 }

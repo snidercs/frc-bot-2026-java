@@ -55,6 +55,9 @@ public final class Config {
     public static final String TURRET_SHOOTER_CAN_BUS = "rio";
     public static final int TURRET_AIM_BUTTON_INDEX = 7;
     public static final int TURRET_SHOOT_BUTTON_INDEX = 18;
+    public static final int TURRET_AIM_HUB_BUTTON_INDEX = 9;
+    public static final int TURRET_AIM_PASS_BUTTON_INDEX = 10;
+    public static final int TURRET_FIRE_BUTTON_INDEX = 11;
 
     public static final int TURRET_UPTAKE_DEVICE_ID = 21;
     public static final String TURRET_UPTAKE_CAN_BUS = "rio";

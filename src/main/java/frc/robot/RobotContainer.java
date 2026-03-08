@@ -91,6 +91,14 @@ public class RobotContainer {
                 NamedCommands.registerCommand("intakeStutter", intake.stutterCommand());
                 NamedCommands.registerCommand("intakeStop",    intake.stopCommand());
                 NamedCommands.registerCommand("driveJitter",   jitterCommand());
+                NamedCommands.registerCommand("aimAtHub",
+                    turret.aimAtHubCommand(() -> drivetrain.getState().Pose));
+                NamedCommands.registerCommand("aimAndShootHub",
+                    turret.aimAndShootHubCommand(() -> drivetrain.getState().Pose));
+                NamedCommands.registerCommand("aimPass",
+                    turret.aimPassCommand(() -> drivetrain.getState().Pose));
+                NamedCommands.registerCommand("aimAndPass",
+                    turret.aimAndPassCommand(() -> drivetrain.getState().Pose));
 
                 autoChooser = AutoBuilder.buildAutoChooser(Config.AUTO_DEFAULT_NAME);
                 SmartDashboard.putData("AutoChooser", autoChooser);
@@ -207,6 +215,21 @@ public class RobotContainer {
 
         // Shooter Control
         stick1.button(Config.TURRET_SHOOT_BUTTON_INDEX).whileTrue(turret.shootCommand());
+
+        // Aim at Hub — hold to continuously track the Hub and spin up
+        stick1.button(Config.TURRET_AIM_HUB_BUTTON_INDEX).whileTrue(
+            turret.aimAtHubCommand(() -> drivetrain.getState().Pose)
+        );
+
+        // Aim and fire at Hub — hold to aim, auto-fires when ready
+        stick1.button(Config.TURRET_FIRE_BUTTON_INDEX).whileTrue(
+            turret.aimAndShootHubCommand(() -> drivetrain.getState().Pose)
+        );
+
+        // Pass mode — hold to aim at the tower and lob fuel at pass speed
+        stick1.button(Config.TURRET_AIM_PASS_BUTTON_INDEX).whileTrue(
+            turret.aimAndPassCommand(() -> drivetrain.getState().Pose)
+        );
 
         // Climber control
         stick0.button(Config.CLIMBER_CLIMB_BUTTON_INDEX).whileTrue(climber.climbCommand());
